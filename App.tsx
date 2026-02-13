@@ -20,6 +20,15 @@ const App: React.FC = () => {
   const [isEmergencyActive, setEmergencyActive] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [selectedIntersectionId, setSelectedIntersectionId] = useState('I-101');
+
+  const handleSetAiEnabled = (enabled: boolean) => {
+    setAiEnabled(enabled);
+    fetch('http://localhost:8001/api/signals/ai', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, scope: "GLOBAL" })
+    }).catch(e => console.error("Failed to toggle AI", e));
+  };
   
   // Multi-Intersection Simulation State (5x5 Grid - 25 intersections)
   // Matching the image: 5 roads horizontal, 5 roads vertical = 25 intersections
@@ -30,7 +39,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchGridState = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/grid/state');
+        const response = await fetch('http://localhost:8001/api/grid/state');
         if (!response.ok) {
            // Fallback or error handling logic here if needed for demo
            return;
@@ -69,7 +78,7 @@ const App: React.FC = () => {
       case 'Emergency':
         return <EmergencyView />;
       case 'Signal Control':
-        return <SignalControlView intersection={selectedInter} aiEnabled={aiEnabled} setAiEnabled={setAiEnabled} />;
+        return <SignalControlView intersection={selectedInter} aiEnabled={aiEnabled} setAiEnabled={handleSetAiEnabled} />;
       case 'Infrastructure':
         return <InfrastructureView />;
       case 'Live Map':
@@ -109,13 +118,13 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <SignalControlPanel intersection={selectedInter} aiEnabled={aiEnabled} setAiEnabled={setAiEnabled} />
+                  <SignalControlPanel intersection={selectedInter} aiEnabled={aiEnabled} setAiEnabled={handleSetAiEnabled} />
                   <AnalyticsWidget />
                 </div>
               </div>
 
               <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-                <AIDecisionPanel aiEnabled={aiEnabled} onApply={() => setAiEnabled(true)} />
+                <AIDecisionPanel aiEnabled={aiEnabled} onApply={() => handleSetAiEnabled(true)} />
                 <EmergencyCard isActive={isEmergencyActive} setActive={setEmergencyActive} />
                 <InfraStatus />
               </div>

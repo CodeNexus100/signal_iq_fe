@@ -9,7 +9,57 @@ interface SignalControlPanelProps {
   setAiEnabled: (val: boolean) => void;
 }
 
-const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection, aiEnabled }) => {
+const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection, aiEnabled, setAiEnabled }) => {
+  const [nsGreenTime, setNsGreenTime] = React.useState(30);
+  const [ewGreenTime, setEwGreenTime] = React.useState(25);
+
+  React.useEffect(() => {
+    const fetchSignalConfig = async () => {
+      try {
+        const res = await fetch(`http://localhost:8001/api/signals/${intersection.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setNsGreenTime(data.nsGreenTime || 30);
+          setEwGreenTime(data.ewGreenTime || 25);
+        }
+      } catch (err) {
+        console.error("Failed to fetch signal config", err);
+      }
+    };
+    fetchSignalConfig();
+  }, [intersection.id]);
+
+  const handleUpdate = async (type: 'ns' | 'ew', value: number) => {
+    if (type === 'ns') setNsGreenTime(value);
+    else setEwGreenTime(value);
+
+    // Debounce or just send? Requirement says "Signal updates must immediately affect". 
+    // But slider dragging generates many events. 
+    // For now, I'll send it. If it's too much, I might need onMouseUp, but input type="range" with onChange fires continuously.
+    // Let's use onChange for state and onMouseUp (commit) for API to avoid flooding, or just fire away if it's local localhost.
+    // Actually, "immediately" implies visual feedback.
+    
+    // Let's try sending on change for responsiveness, assuming local backend can handle it.
+    // Optimization: separate state update from API call? 
+    // I will simply call the API.
+    
+    try {
+      await fetch(`http://localhost:8001/api/signals/${intersection.id}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nsGreenTime: type === 'ns' ? value : nsGreenTime,
+          ewGreenTime: type === 'ew' ? value : ewGreenTime,
+          mode: 'MANUAL'
+        })
+      });
+      // If we switch to manual, we should update parent state too
+      if (aiEnabled) setAiEnabled(false);
+    } catch (err) {
+      console.error("Failed to update signal", err);
+    }
+  };
+
   return (
     <div className="bg-slate-900/40 border border-slate-700/50 rounded-2xl p-6 flex flex-col gap-4 shadow-xl">
       <div className="flex items-center justify-between">
@@ -28,16 +78,28 @@ const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection, a
         <div className="space-y-2">
           <div className="flex justify-between items-center text-[10px] uppercase font-bold text-slate-500">
             <span>NS Green Time</span>
-            <span className="text-white font-mono">30s</span>
+            <span className="text-white font-mono">{nsGreenTime}s</span>
           </div>
-          <input type="range" className="w-full accent-blue-500 h-1.5 bg-slate-800 rounded-full" />
+          <input 
+            type="range" 
+            min="10" max="60" 
+            value={nsGreenTime} 
+            onChange={(e) => handleUpdate('ns', parseInt(e.target.value))}
+            className="w-full accent-blue-500 h-1.5 bg-slate-800 rounded-full" 
+          />
         </div>
         <div className="space-y-2">
           <div className="flex justify-between items-center text-[10px] uppercase font-bold text-slate-500">
             <span>EW Green Time</span>
-            <span className="text-white font-mono">25s</span>
+            <span className="text-white font-mono">{ewGreenTime}s</span>
           </div>
-          <input type="range" className="w-full accent-blue-500 h-1.5 bg-slate-800 rounded-full" />
+          <input 
+            type="range" 
+            min="10" max="60" 
+            value={ewGreenTime} 
+            onChange={(e) => handleUpdate('ew', parseInt(e.target.value))}
+            className="w-full accent-blue-500 h-1.5 bg-slate-800 rounded-full" 
+          />
         </div>
       </div>
 
