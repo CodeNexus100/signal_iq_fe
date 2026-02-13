@@ -27,6 +27,8 @@ const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection, a
       }
     };
     fetchSignalConfig();
+    const interval = setInterval(fetchSignalConfig, 500);
+    return () => clearInterval(interval);
   }, [intersection.id]);
 
   const handleUpdate = async (type: 'ns' | 'ew', value: number) => {
@@ -109,7 +111,7 @@ const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection, a
           <div className="flex flex-col">
             <span className="text-[10px] uppercase text-slate-500 font-bold">Current Cycle</span>
             <span className="text-sm font-mono font-bold">
-              {intersection.timer}s remaining ({intersection.nsSignal === 'GREEN' ? 'NS' : 'EW'})
+              {Math.ceil(intersection.timer)}s remaining ({intersection.nsSignal === 'GREEN' ? 'NS' : 'EW'})
             </span>
           </div>
         </div>
