@@ -29,6 +29,15 @@ const App: React.FC = () => {
       body: JSON.stringify({ enabled, scope: "GLOBAL" })
     }).catch(e => console.error("Failed to toggle AI", e));
   };
+
+  const handleSetEmergencyActive = (active: boolean) => {
+    setEmergencyActive(active);
+    const endpoint = active ? 'start' : 'stop';
+    fetch(`http://localhost:8001/api/emergency/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }).catch(e => console.error(`Failed to ${endpoint} emergency`, e));
+  };
   
   // Multi-Intersection Simulation State (5x5 Grid - 25 intersections)
   // Matching the image: 5 roads horizontal, 5 roads vertical = 25 intersections
@@ -40,10 +49,7 @@ const App: React.FC = () => {
     const fetchGridState = async () => {
       try {
         const response = await fetch('http://localhost:8001/api/grid/state');
-        if (!response.ok) {
-           // Fallback or error handling logic here if needed for demo
-           return;
-        }
+        if (!response.ok) return;
         const data = await response.json();
         if (data.intersections) setIntersections(data.intersections);
         if (data.vehicles) setVehicles(data.vehicles);
@@ -52,10 +58,27 @@ const App: React.FC = () => {
       }
     };
 
-    const interval = setInterval(fetchGridState, 100);
-    fetchGridState(); // Initial fetch
+    const fetchEmergencyState = async () => {
+      try {
+        const response = await fetch('http://localhost:8001/api/emergency/state');
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.active !== undefined) setEmergencyActive(data.active);
+      } catch (error) {
+        console.error("Failed to fetch emergency state:", error);
+      }
+    };
 
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchGridState, 100);
+    const emergencyInterval = setInterval(fetchEmergencyState, 500);
+    
+    fetchGridState(); // Initial fetch
+    fetchEmergencyState();
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(emergencyInterval);
+    };
   }, []);
 
   const selectedInter = intersections.find(i => i.id === selectedIntersectionId) || intersections[0];
@@ -125,7 +148,7 @@ const App: React.FC = () => {
 
               <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
                 <AIDecisionPanel aiEnabled={aiEnabled} onApply={() => handleSetAiEnabled(true)} />
-                <EmergencyCard isActive={isEmergencyActive} setActive={setEmergencyActive} />
+                <EmergencyCard isActive={isEmergencyActive} setActive={handleSetEmergencyActive} />
                 <InfraStatus />
               </div>
             </div>
