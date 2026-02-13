@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import KPISection from './components/KPISection';
 import TrafficMap2D from './components/TrafficMap2D';
@@ -44,6 +44,7 @@ const App: React.FC = () => {
   const [intersections, setIntersections] = useState<IntersectionStatus[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]); // Using any for now, refine with proper Vehicle type later
   const [emergencyVehicle, setEmergencyVehicle] = useState<any>(null);
+  const emergencyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch grid state from backend
   useEffect(() => {
@@ -65,7 +66,13 @@ const App: React.FC = () => {
         if (!response.ok) return;
         const data = await response.json();
         
-        if (data.emergency) {
+        if (data.emergency && data.emergency.active) {
+            // New valid active data: clear any pending timeout
+            if (emergencyTimeoutRef.current) {
+                clearTimeout(emergencyTimeoutRef.current);
+                emergencyTimeoutRef.current = null;
+            }
+
             setEmergencyActive(data.emergency.active);
             setEmergencyVehicle({
                 id: 'EMG-1',
@@ -77,7 +84,19 @@ const App: React.FC = () => {
             });
         } else {
              setEmergencyActive(false);
-             setEmergencyVehicle(null);
+             
+             // If we currently have a vehicle and no timeout is active, start persistence timer
+             // We can't check 'emergencyVehicle' state directly here due to closure staleness,
+             // so we rely on the fact that if we had one, the user sees it, and we want to keep it.
+             // But simpler: just set the timeout. If it was already null, setting it to null again in 2s is fine.
+             // Crucially, we do NOT set it to null immediately here.
+             
+             if (!emergencyTimeoutRef.current) {
+                 emergencyTimeoutRef.current = setTimeout(() => {
+                     setEmergencyVehicle(null);
+                     emergencyTimeoutRef.current = null;
+                 }, 2000);
+             }
         }
       } catch (error) {
         console.error("Failed to fetch emergency state:", error);
