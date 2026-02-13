@@ -23,45 +23,44 @@ const App: React.FC = () => {
   
   // Multi-Intersection Simulation State (5x5 Grid - 25 intersections)
   // Matching the image: 5 roads horizontal, 5 roads vertical = 25 intersections
-  const [intersections, setIntersections] = useState<IntersectionStatus[]>(() => {
-    return Array.from({ length: 25 }, (_, i) => ({
-      id: `I-${101 + i}`,
-      nsSignal: i % 2 === 0 ? 'GREEN' : 'RED',
-      ewSignal: i % 2 === 0 ? 'RED' : 'GREEN',
-      timer: 15 + Math.floor(Math.random() * 15),
-    }));
-  });
+  const [intersections, setIntersections] = useState<IntersectionStatus[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]); // Using any for now, refine with proper Vehicle type later
 
-  // Global cycle logic for all intersections
+  // Fetch grid state from backend
   useEffect(() => {
-    const interval = setInterval(() => {
-      setIntersections(prev => prev.map(inter => {
-        // Simple priority logic for emergency: Green-wave on the first column
-        const idNum = parseInt(inter.id.split('-')[1]);
-        const isPriorityCorridor = (idNum - 101) % 5 === 0;
-
-        if (isEmergencyActive && isPriorityCorridor) {
-          return { ...inter, nsSignal: 'GREEN', ewSignal: 'RED', timer: 99 };
+    const fetchGridState = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/grid/state');
+        if (!response.ok) {
+           // Fallback or error handling logic here if needed for demo
+           return;
         }
+        const data = await response.json();
+        if (data.intersections) setIntersections(data.intersections);
+        if (data.vehicles) setVehicles(data.vehicles);
+      } catch (error) {
+        console.error("Failed to fetch grid state:", error);
+      }
+    };
 
-        const nextTimer = inter.timer - 1;
-        if (nextTimer <= 0) {
-          const isNSGreen = inter.nsSignal === 'GREEN';
-          const baseTime = aiEnabled ? (Math.random() > 0.5 ? 12 : 28) : 20;
-          return {
-            ...inter,
-            nsSignal: isNSGreen ? 'RED' : 'GREEN',
-            ewSignal: isNSGreen ? 'GREEN' : 'RED',
-            timer: baseTime,
-          };
-        }
-        return { ...inter, timer: nextTimer };
-      }));
-    }, 1000);
+    const interval = setInterval(fetchGridState, 100);
+    fetchGridState(); // Initial fetch
+
     return () => clearInterval(interval);
-  }, [isEmergencyActive, aiEnabled]);
+  }, []);
 
   const selectedInter = intersections.find(i => i.id === selectedIntersectionId) || intersections[0];
+
+  if (intersections.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#0a0b1e] text-slate-400">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+          <span className="text-sm font-mono animate-pulse">Initializing SignalIQ Grid...</span>
+        </div>
+      </div>
+    );
+  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -95,7 +94,7 @@ const App: React.FC = () => {
                       </div>
                   </div>
                   
-                  <TrafficMap2D intersections={intersections} emergencyActive={isEmergencyActive} onIntersectionClick={setSelectedIntersectionId} />
+                  <TrafficMap2D intersections={intersections} vehicles={vehicles} emergencyActive={isEmergencyActive} onIntersectionClick={setSelectedIntersectionId} />
                   
                   <div className="absolute bottom-4 left-4 z-20 flex gap-4 bg-black/40 backdrop-blur-sm p-3 rounded-xl border border-white/5">
                     <div className="flex items-center gap-2">
