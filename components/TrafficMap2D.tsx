@@ -1,16 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Stage, Layer, Rect, Circle, Line, Group, Text } from 'react-konva';
-import { IntersectionStatus, Vehicle, VehicleType } from '../types';
+import { IntersectionStatus, Vehicle, VehicleType, EmergencyVehicle } from '../types';
 
 interface TrafficMap2DProps {
   intersections: IntersectionStatus[];
   vehicles?: Vehicle[];
   emergencyActive: boolean;
+  emergencyVehicle?: EmergencyVehicle | null;
   onIntersectionClick: (id: string) => void;
 }
 
-const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [], emergencyActive, onIntersectionClick }) => {
+const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [], emergencyActive, emergencyVehicle, onIntersectionClick }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [tick, setTick] = useState(0);
@@ -196,6 +197,71 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
                 </Group>
               );
             })}
+
+            {/* Separate Emergency Vehicle Rendering */}
+            {emergencyVehicle && emergencyVehicle.active && (() => {
+                // Calculate position based on laneId and position (same logic as vehicles)
+                let vx = 0, vy = 0, rot = 0;
+                const roadIdx = parseInt(emergencyVehicle.laneId.match(/\d+/)?.[0] || '0');
+                
+                // Determine logic based on H or V lane
+                if (emergencyVehicle.laneId.startsWith('H')) {
+                   vx = emergencyVehicle.position;
+                   const roadY = grid.h[roadIdx];
+                   // Assuming default forward for now, or determining based on start/end
+                   // Since we don't have explicit direction in EmergencyVehicle yet, assume forward (L->R)
+                   // If we need backward, we might need direction in the type or infer from laneId
+                   vy = roadY + lanePadding; 
+                   rot = -90;
+                } else {
+                   vy = emergencyVehicle.position;
+                   const roadX = grid.v[roadIdx];
+                   vx = roadX - lanePadding;
+                   rot = 0;
+                }
+
+                return (
+                <Group x={vx} y={vy} rotation={rot}>
+                    {/* Pulsing Aura */}
+                     <Circle 
+                        radius={30} 
+                        fill={flashRate > 0 ? '#ef4444' : 'transparent'} 
+                        opacity={0.3} 
+                        shadowBlur={30} 
+                        shadowColor="#ef4444"
+                     />
+                     {/* Vehicle Body */}
+                     <Rect 
+                        width={14} 
+                        height={28} 
+                        offsetX={7} 
+                        offsetY={14} 
+                        fill="#ef4444" 
+                        cornerRadius={2}
+                        rotation={0} 
+                     />
+                     {/* Light Bar */}
+                     <Rect 
+                        width={14} 
+                        height={6} 
+                        offsetX={7} 
+                        offsetY={-6} 
+                        fill={flashRate > 0 ? '#ffffff' : '#ef4444'} 
+                     />
+                     <Text 
+                        text="EMERGENCY" 
+                        fontSize={10} 
+                        fill="#ffffff" 
+                        fontStyle="bold"
+                        y={-22}
+                        offsetX={32}
+                        rotation={-rot} // Keep text upright relative to screen if desired, or rotate with vehicle
+                     />
+                </Group>
+                );
+            })()}
+
+            {/* Separate Emergency Vehicle Rendering */}
           </Layer>
         </Stage>
       )}

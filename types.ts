@@ -25,3 +25,12 @@ export interface IntersectionStatus {
   ewSignal: SignalState;
   timer: number;
 }
+
+export interface EmergencyVehicle {
+  id: string; // We might need to generate this if not provided
+  laneId: string;
+  position: number;
+  speed: number;
+  type: 'emergency';
+  active: boolean;
+}

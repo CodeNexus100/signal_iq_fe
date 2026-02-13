@@ -43,6 +43,7 @@ const App: React.FC = () => {
   // Matching the image: 5 roads horizontal, 5 roads vertical = 25 intersections
   const [intersections, setIntersections] = useState<IntersectionStatus[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]); // Using any for now, refine with proper Vehicle type later
+  const [emergencyVehicle, setEmergencyVehicle] = useState<any>(null);
 
   // Fetch grid state from backend
   useEffect(() => {
@@ -63,14 +64,28 @@ const App: React.FC = () => {
         const response = await fetch('http://localhost:8001/api/emergency/state');
         if (!response.ok) return;
         const data = await response.json();
-        if (data.active !== undefined) setEmergencyActive(data.active);
+        
+        if (data.emergency) {
+            setEmergencyActive(data.emergency.active);
+            setEmergencyVehicle({
+                id: 'EMG-1',
+                laneId: data.emergency.laneId,
+                position: data.emergency.position,
+                speed: data.emergency.speed,
+                type: 'emergency',
+                active: data.emergency.active
+            });
+        } else {
+             setEmergencyActive(false);
+             setEmergencyVehicle(null);
+        }
       } catch (error) {
         console.error("Failed to fetch emergency state:", error);
       }
     };
 
     const interval = setInterval(fetchGridState, 100);
-    const emergencyInterval = setInterval(fetchEmergencyState, 500);
+    const emergencyInterval = setInterval(fetchEmergencyState, 100);
     
     fetchGridState(); // Initial fetch
     fetchEmergencyState();
@@ -126,7 +141,7 @@ const App: React.FC = () => {
                       </div>
                   </div>
                   
-                  <TrafficMap2D intersections={intersections} vehicles={vehicles} emergencyActive={isEmergencyActive} onIntersectionClick={setSelectedIntersectionId} />
+                  <TrafficMap2D intersections={intersections} vehicles={vehicles} emergencyActive={isEmergencyActive} emergencyVehicle={emergencyVehicle} onIntersectionClick={setSelectedIntersectionId} />
                   
                   <div className="absolute bottom-4 left-4 z-20 flex gap-4 bg-black/40 backdrop-blur-sm p-3 rounded-xl border border-white/5">
                     <div className="flex items-center gap-2">
