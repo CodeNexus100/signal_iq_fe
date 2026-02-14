@@ -94,6 +94,47 @@ const SignalControlView: React.FC = () => {
       }
   };
 
+
+  const [successMsg, setSuccessMsg] = useState('');
+
+  const handleApplyPattern = async (pattern: string) => {
+      // Map UI names to API enum
+      const map: Record<string, string> = {
+          'Rush Hour': 'rush_hour',
+          'Night Mode': 'night_mode',
+          'Event': 'event',
+          'Holiday': 'holiday'
+      };
+      
+      const apiPattern = map[pattern];
+      if (!apiPattern) return;
+
+      try {
+          const res = await fetch('http://localhost:8001/api/signals/pattern', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ pattern: apiPattern })
+          });
+          
+          if (res.ok) {
+              setSuccessMsg(`Applied ${pattern} Pattern`);
+              
+              // Force refresh details if selected
+              if (selectedId) {
+                  const detailsRes = await fetch(`http://localhost:8001/api/signals/${selectedId}`);
+                  if (detailsRes.ok) {
+                      const data = await detailsRes.json();
+                      setDetails(data);
+                  }
+              }
+              
+              setTimeout(() => setSuccessMsg(''), 3000);
+          }
+      } catch (e) {
+          console.error("Failed to apply pattern", e);
+      }
+  };
+
   const filteredIntersections = intersections.filter(i => 
     i.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
     i.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -107,10 +148,21 @@ const SignalControlView: React.FC = () => {
           <p className="text-slate-400 text-sm">Direct intersection overriding and cycle management</p>
         </div>
         <div className="flex gap-3">
+            {successMsg && (
+                <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold flex items-center gap-2"
+                >
+                    <Activity size={14} />
+                    {successMsg}
+                </motion.div>
+            )}
           <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all text-sm font-bold shadow-lg shadow-blue-600/20">
             <Zap size={16} />
             Bulk AI Optimize
           </button>
+
           <button className="flex items-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-500/30 rounded-xl transition-all text-sm font-bold">
             <Power size={16} />
             Emergency Flush
@@ -289,7 +341,11 @@ const SignalControlView: React.FC = () => {
                </div>
                <div className="grid grid-cols-2 gap-3">
                  {['Rush Hour', 'Night Mode', 'Event', 'Holiday'].map(m => (
-                   <button key={m} className="py-2 px-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-300 transition-colors">
+                   <button 
+                    key={m} 
+                    onClick={() => handleApplyPattern(m)}
+                    className="py-2 px-3 bg-slate-800 hover:bg-slate-700 rounded-lg text-[10px] font-bold text-slate-300 transition-colors"
+                   >
                      {m}
                    </button>
                  ))}
