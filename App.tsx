@@ -103,8 +103,9 @@ const App: React.FC = () => {
       }
     };
 
-    const interval = setInterval(fetchGridState, 50);
-    const emergencyInterval = setInterval(fetchEmergencyState, 50);
+    // Optimization: Reduce polling to 100ms (10Hz) which is sufficient for UI
+    const interval = setInterval(fetchGridState, 100);
+    const emergencyInterval = setInterval(fetchEmergencyState, 200); // 5Hz for emergency is fine
     
     fetchGridState(); // Initial fetch
     fetchEmergencyState();

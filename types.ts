@@ -7,7 +7,7 @@ export interface Vehicle {
   id: string;
   laneId: string; // Identifies which road/lane the vehicle is on
   laneType: 'horizontal' | 'vertical';
-  direction: 'forward' | 'backward'; // forward: L->R or T->B, backward: R->L or B->T
+  direction: 'north' | 'south' | 'east' | 'west';
   position: number;
   speed: number;
   type: VehicleType;

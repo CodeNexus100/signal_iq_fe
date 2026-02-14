@@ -11,9 +11,18 @@ interface TrafficMap2DProps {
   onIntersectionClick: (id: string) => void;
 }
 
+import { useVehicleAnimation } from '../hooks/useVehicleAnimation';
+
 const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [], emergencyActive, emergencyVehicle, onIntersectionClick }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+
+  // Use interpolated vehicles for display
+  const displayVehicles = useVehicleAnimation({
+      serverVehicles: vehicles,
+      intersections,
+      pollInterval: 50
+  });
 
   // Grid constants: 5 roads = 4 blocks = 25 intersections
   const roadWidth = 50; 
@@ -101,20 +110,42 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
             })}
 
             {/* Vehicle Layer */}
-            {vehicles.map(v => {
+            {displayVehicles.map(v => {
               let vx = 0, vy = 0, rot = 0;
               const roadIdx = parseInt(v.laneId.match(/\d+/)?.[0] || '0');
 
               if (v.laneType === 'horizontal') {
                 vx = v.position;
                 const roadY = grid.h[roadIdx];
-                vy = v.direction === 'forward' ? roadY + lanePadding : roadY - lanePadding;
-                rot = v.direction === 'forward' ? -90 : 90;
+                // East (Right) -> Bottom Lane. West (Left) -> Top Lane
+                vy = v.direction === 'east' ? roadY + lanePadding : roadY - lanePadding;
+                rot = v.direction === 'east' ? 0 : 180; // Point Right or Left
               } else {
                 vy = v.position;
                 const roadX = grid.v[roadIdx];
-                vx = v.direction === 'forward' ? roadX - lanePadding : roadX + lanePadding;
-                rot = v.direction === 'forward' ? 0 : 180;
+                // South (Down) -> Right Lane? (Standard Right Hand Drive). 
+                // North (Up) -> Left Lane?
+                // Let's stick to previous layout: 
+                // 'forward' was roadX - lanePadding (Left). 'backward' was roadX + lanePadding (Right).
+                // Engine logic: 'south' is increasing Y (Down). 'north' is increasing Y (Up - wait no, Decreasing Y).
+                
+                // Let's standardise: 
+                // South (Down) -> Right side of road (x > roadX).
+                // North (Up) -> Left side of road (x < roadX).
+                // Wait, logic in Engine says:
+                // South (Inc Pos): Moves Down.
+                // North (Dec Pos): Moves Up.
+                
+                // If I want standard layout:
+                // Southbound (Down) traffic should be on the LEFT side if UK/India/Japan (LHT) or RIGHT side if US/EU (RHT).
+                // Previous code: 'forward' (Down?) was roadX - lanePadding (Left).
+                // Let's assume Left-Hand Traffic for now? Or just map it.
+                // Let's use:
+                // South (Down) -> roadX - lanePadding (Left)
+                // North (Up) -> roadX + lanePadding (Right)
+                
+                vx = v.direction === 'south' ? roadX - lanePadding : roadX + lanePadding;
+                rot = v.direction === 'south' ? 90 : -90; // Point Down or Up
               }
 
               const isEmergency = v.type === 'emergency';
@@ -129,10 +160,10 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
                     <Group>
                       {/* Pulsating Halo */}
                       <Rect 
-                        width={vWid + 16} 
-                        height={vLen + 16} 
-                        offsetX={vWid/2 + 8} 
-                        offsetY={vLen/2 + 8}
+                        width={vLen + 16} 
+                        height={vWid + 16} 
+                        offsetX={vLen/2 + 8} 
+                        offsetY={vWid/2 + 8}
                         fill={flashRate > 0 ? '#ef4444' : '#3b82f6'} 
                         opacity={0.15}
                         cornerRadius={4}
@@ -146,22 +177,22 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
                         fontSize={10} 
                         fontStyle="bold" 
                         offsetX={10} 
-                        offsetY={vLen + 12} 
+                        offsetY={vWid + 12} 
                         rotation={-rot} 
                       />
                     </Group>
                   )}
 
                   {/* Vehicle Body Shadow */}
-                  <Rect width={vWid} height={vLen} offsetX={vWid/2} offsetY={vLen/2} fill="#000" opacity={0.2} x={1} y={1} cornerRadius={1} />
+                  <Rect width={vLen} height={vWid} offsetX={vLen/2} offsetY={vWid/2} fill="#000" opacity={0.2} x={1} y={1} cornerRadius={1} />
 
-                  {/* Main Vehicle Body */}
-                  <Rect
-                    width={vWid}
-                    height={vLen}
-                    offsetX={vWid / 2}
-                    offsetY={vLen / 2}
-                    fill={colors[v.type]}
+                   {/* Main Vehicle Body */}
+                   <Rect
+                     width={vLen}
+                     height={vWid}
+                     offsetX={vLen / 2}
+                     offsetY={vWid / 2}
+                     fill={colors[v.type]}
                     cornerRadius={v.type === 'car' ? 3 : 1}
                     stroke={isEmergency ? (flashRate > 0 ? '#ef4444' : '#3b82f6') : 'rgba(255,255,255,0.1)'}
                     strokeWidth={isEmergency ? 2 : 0.5}
@@ -171,10 +202,10 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
                   {isEmergency && (
                     <Group>
                       <Rect 
-                        width={vWid} 
-                        height={6} 
-                        offsetX={vWid/2} 
-                        offsetY={3} 
+                        width={6} 
+                        height={vWid} 
+                        offsetX={3} 
+                        offsetY={vWid/2} 
                         fill={flashRate > 0 ? '#ef4444' : '#3b82f6'} 
                         opacity={0.9} 
                       />
@@ -183,7 +214,7 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
 
                   {/* Visual Detail for common vehicles */}
                   {!isEmergency && v.type === 'car' && (
-                    <Rect width={vWid-2} height={vLen/3} offsetX={vWid/2-1} offsetY={vLen/2-2} fill="#0f172a" opacity={0.3} cornerRadius={1} />
+                    <Rect width={vLen/3} height={vWid-2} offsetX={vLen/2-2} offsetY={vWid/2-1} fill="#0f172a" opacity={0.3} cornerRadius={1} />
                   )}
                 </Group>
               );
@@ -200,15 +231,16 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
                    vx = emergencyVehicle.position;
                    const roadY = grid.h[roadIdx];
                    // Assuming default forward for now, or determining based on start/end
-                   // Since we don't have explicit direction in EmergencyVehicle yet, assume forward (L->R)
-                   // If we need backward, we might need direction in the type or infer from laneId
+                   // With Horizontal Shape (Point Right):
+                   // East (H0) -> rot = 0
                    vy = roadY + lanePadding; 
-                   rot = -90;
+                   rot = 0;
                 } else {
                    vy = emergencyVehicle.position;
                    const roadX = grid.v[roadIdx];
                    vx = roadX - lanePadding;
-                   rot = 0;
+                   // South (Down) -> rot = 90
+                   rot = 90;
                 }
 
                 return (
@@ -221,22 +253,22 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
                         shadowBlur={30} 
                         shadowColor="#ef4444"
                      />
-                     {/* Vehicle Body */}
+                     {/* Vehicle Body (Horizontal Default) */}
                      <Rect 
-                        width={14} 
-                        height={28} 
-                        offsetX={7} 
-                        offsetY={14} 
+                        width={28} 
+                        height={14} 
+                        offsetX={14} 
+                        offsetY={7} 
                         fill="#ef4444" 
                         cornerRadius={2}
                         rotation={0} 
                      />
                      {/* Light Bar */}
                      <Rect 
-                        width={14} 
-                        height={6} 
-                        offsetX={7} 
-                        offsetY={-6} 
+                        width={6} 
+                        height={14} 
+                        offsetX={-6} 
+                        offsetY={7} 
                         fill={flashRate > 0 ? '#ffffff' : '#ef4444'} 
                      />
                      <Text 
