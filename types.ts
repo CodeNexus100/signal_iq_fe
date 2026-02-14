@@ -65,3 +65,20 @@ export interface GridOverview {
   roads: RoadOverview[];
   zones: ZoneOverview[];
 }
+
+export interface IntersectionSummary {
+  id: string;
+  name: string;
+  status: string;
+}
+
+export interface SignalDetails {
+  intersectionId: string;
+  nsGreenTime: number;
+  ewGreenTime: number;
+  currentPhase: string;
+  timerRemaining: number;
+  flowRate: number;
+  pedestrianDemand: string;
+  aiEnabled: boolean;
+}

@@ -136,7 +136,7 @@ const App: React.FC = () => {
       case 'Emergency':
         return <EmergencyView />;
       case 'Signal Control':
-        return <SignalControlView intersection={selectedInter} aiEnabled={aiEnabled} setAiEnabled={handleSetAiEnabled} />;
+        return <SignalControlView />;
       case 'Infrastructure':
         return <InfrastructureView />;
       case 'Live Map':
