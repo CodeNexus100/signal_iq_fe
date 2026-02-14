@@ -97,6 +97,33 @@ const SignalControlView: React.FC = () => {
 
   const [successMsg, setSuccessMsg] = useState('');
 
+  const [isOptimizing, setIsOptimizing] = useState(false);
+
+  const handleBulkOptimize = async () => {
+    setIsOptimizing(true);
+    try {
+        const res = await fetch('http://localhost:8001/api/signals/optimize-all', {
+            method: 'POST'
+        });
+        if (res.ok) {
+            setSuccessMsg('Global AI Optimization Applied');
+             // Force refresh details if selected
+              if (selectedId) {
+                  const detailsRes = await fetch(`http://localhost:8001/api/signals/${selectedId}`);
+                  if (detailsRes.ok) {
+                      const data = await detailsRes.json();
+                      setDetails(data);
+                  }
+              }
+            setTimeout(() => setSuccessMsg(''), 3000);
+        }
+    } catch (e) {
+        console.error("Failed to optimize all", e);
+    } finally {
+        setIsOptimizing(false);
+    }
+  };
+
   const handleApplyPattern = async (pattern: string) => {
       // Map UI names to API enum
       const map: Record<string, string> = {
@@ -158,9 +185,13 @@ const SignalControlView: React.FC = () => {
                     {successMsg}
                 </motion.div>
             )}
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all text-sm font-bold shadow-lg shadow-blue-600/20">
-            <Zap size={16} />
-            Bulk AI Optimize
+          <button 
+            onClick={handleBulkOptimize}
+            disabled={isOptimizing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all text-sm font-bold shadow-lg ${isOptimizing ? 'bg-blue-600/50 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/20'}`}
+          >
+            <Zap size={16} className={isOptimizing ? 'animate-pulse' : ''} />
+            {isOptimizing ? 'Optimizing...' : 'Bulk AI Optimize'}
           </button>
 
           <button className="flex items-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-500/30 rounded-xl transition-all text-sm font-bold">
