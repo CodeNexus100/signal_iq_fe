@@ -3,11 +3,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Map as MapIcon, Layers, Maximize2, MousePointer2, Info, Compass, Shield, Wind } from 'lucide-react';
 import { Stage, Layer, Rect, Circle, Line, Group, Text } from 'react-konva';
+import { GridOverview, RoadOverview } from '../types';
 
 const LiveMapView: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [selectedZone, setSelectedZone] = useState('Central District');
+  const [gridOverview, setGridOverview] = useState<GridOverview | null>(null);
 
   useEffect(() => {
     const handleResize = () => {
@@ -23,22 +25,75 @@ const LiveMapView: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const intersections = [];
-  const spacing = 180;
-  const offset = 100;
+  // Poll Backend
+  useEffect(() => {
+    const fetchOverview = async () => {
+        try {
+            const res = await fetch('http://localhost:8001/api/grid/overview');
+            if (res.ok) {
+                const data = await res.json();
+                setGridOverview(data);
+            }
+        } catch (e) {
+            console.error("Failed to fetch grid overview", e);
+        }
+    };
 
-  for (let i = 0; i < 4; i++) {
-    for (let j = 0; j < 4; j++) {
-      intersections.push({ x: offset + i * spacing, y: offset + j * spacing, id: `I-${100 + i * 4 + j}` });
-    }
+    fetchOverview(); // Initial
+    const interval = setInterval(fetchOverview, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Generate 5x5 Grid Nodes (25 nodes)
+  // Dynamic scaling
+  const padding = 60;
+  const availableSize = Math.min(dimensions.width, dimensions.height) - (padding * 2);
+  const spacing = availableSize / 4; // 4 segments for 5 points
+  
+  const offsetX = (dimensions.width - availableSize) / 2;
+  const offsetY = (dimensions.height - availableSize) / 2;
+
+  const intersections = [];
+  
+  if (dimensions.width > 0) {
+      for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+            // i = col, j = row
+          intersections.push({ 
+              x: offsetX + i * spacing, 
+              y: offsetY + j * spacing, 
+              id: `I-${101 + j * 5 + i}`,
+              row: j,
+              col: i
+          });
+        }
+      }
   }
 
-  const districts = [
-    { name: 'Central District', status: 'Optimal', load: 42, color: 'text-emerald-400' },
-    { name: 'North Industrial', status: 'Moderate', load: 68, color: 'text-amber-400' },
-    { name: 'West Harbor', status: 'Congested', load: 89, color: 'text-red-400' },
-    { name: 'East Tech Park', status: 'Optimal', load: 31, color: 'text-emerald-400' },
-  ];
+  const getRoadColor = (laneId: string) => {
+      if (!gridOverview) return '#3b82f6'; // Default Blue
+      const road = gridOverview.roads.find(r => r.laneId === laneId);
+      if (!road) return '#3b82f6';
+      
+      if (road.congestion > 0.75) return '#ef4444'; // Red
+      if (road.congestion > 0.5) return '#f59e0b'; // Yellow
+      return '#3b82f6'; // Blue
+  };
+  
+  const getRoadWidth = (laneId: string) => {
+       if (!gridOverview) return 12;
+       const road = gridOverview.roads.find(r => r.laneId === laneId);
+       // Thicker if congested?
+       return road && road.congestion > 0.5 ? 14 : 12;
+  };
+  
+  const getZoneColor = (status: string) => {
+      switch(status.toLowerCase()) {
+          case 'congested': return 'text-red-400';
+          case 'moderate': return 'text-amber-400';
+          default: return 'text-emerald-400';
+      }
+  };
 
   return (
     <div className="flex flex-col h-full space-y-6 overflow-hidden">
@@ -78,76 +133,82 @@ const LiveMapView: React.FC = () => {
                   <Line key={`h-${i}`} points={[0, i * 40, dimensions.width, i * 40]} stroke="#1e293b" strokeWidth={0.5} opacity={0.2} />
                 ))}
 
-                {/* Roads */}
-                {/* Horizontal */}
-                {[0, 1, 2, 3].map(row => (
-                  <Line 
-                    key={`hr-${row}`} 
-                    points={[offset, offset + row * spacing, offset + 3 * spacing, offset + row * spacing]} 
-                    stroke="#1e293b" 
-                    strokeWidth={12} 
-                    lineCap="round"
-                  />
-                ))}
-                {/* Vertical */}
-                {[0, 1, 2, 3].map(col => (
-                  <Line 
-                    key={`vc-${col}`} 
-                    points={[offset + col * spacing, offset, offset + col * spacing, offset + 3 * spacing]} 
-                    stroke="#1e293b" 
-                    strokeWidth={12} 
-                    lineCap="round"
-                  />
-                ))}
+                {/* Roads 5x5 Grid */}
+                {/* Horizontal Rows (H0 - H4) */}
+                {[0, 1, 2, 3, 4].map(row => {
+                  const color = getRoadColor(`H${row}`);
+                  return (
+                    <Group key={`hr-group-${row}`}>
+                         {/* Base Road */}
+                         <Line 
+                            points={[offsetX, offsetY + row * spacing, offsetX + 4 * spacing, offsetY + row * spacing]} 
+                            stroke="#1e293b" 
+                            strokeWidth={getRoadWidth(`H${row}`) + 4} 
+                            lineCap="round"
+                          />
+                          {/* Active Color */}
+                          <Line 
+                            points={[offsetX, offsetY + row * spacing, offsetX + 4 * spacing, offsetY + row * spacing]} 
+                            stroke={color} 
+                            strokeWidth={getRoadWidth(`H${row}`)} 
+                            lineCap="round"
+                            opacity={0.8}
+                            shadowBlur={color === '#3b82f6' ? 0 : 15}
+                            shadowColor={color}
+                          />
+                    </Group>
+                  );
+                })}
 
-                {/* Road Glows (Congestion Level) */}
-                {intersections.map((node, idx) => {
-                   if (idx % 4 !== 3) { // Draw horizontal glow
-                     const load = Math.random();
-                     const color = load > 0.8 ? '#ef4444' : load > 0.5 ? '#f59e0b' : '#3b82f6';
-                     return (
-                        <Line 
-                          key={`glow-h-${idx}`} 
-                          points={[node.x, node.y, node.x + spacing, node.y]} 
-                          stroke={color} 
-                          strokeWidth={2} 
-                          opacity={0.6}
-                          shadowBlur={10}
-                          shadowColor={color}
-                        />
-                     )
-                   }
-                   return null;
+                {/* Vertical Cols (V0 - V4) */}
+                {[0, 1, 2, 3, 4].map(col => {
+                  const color = getRoadColor(`V${col}`);
+                  return (
+                     <Group key={`vc-group-${col}`}>
+                         <Line 
+                            points={[offsetX + col * spacing, offsetY, offsetX + col * spacing, offsetY + 4 * spacing]} 
+                            stroke="#1e293b" 
+                            strokeWidth={getRoadWidth(`V${col}`) + 4} 
+                            lineCap="round"
+                          />
+                          <Line 
+                            points={[offsetX + col * spacing, offsetY, offsetX + col * spacing, offsetY + 4 * spacing]} 
+                            stroke={color} 
+                            strokeWidth={getRoadWidth(`V${col}`)} 
+                            lineCap="round"
+                            opacity={0.8}
+                            shadowBlur={color === '#3b82f6' ? 0 : 15}
+                            shadowColor={color}
+                          />
+                     </Group>
+                  );
                 })}
 
                 {/* Intersections Nodes */}
                 {intersections.map(node => (
                   <Group key={node.id}>
                     <Rect 
-                      x={node.x - 10} 
-                      y={node.y - 10} 
-                      width={20} 
-                      height={20} 
-                      fill="#334155" 
+                      x={node.x - 8} 
+                      y={node.y - 8} 
+                      width={16} 
+                      height={16} 
+                      fill="#1e293b" 
                       cornerRadius={4}
-                      shadowBlur={5}
                       stroke="#475569"
                       strokeWidth={1}
                     />
                     <Circle 
                       x={node.x} 
                       y={node.y} 
-                      radius={4} 
-                      fill={Math.random() > 0.5 ? '#10b981' : '#ef4444'} 
-                      shadowBlur={10} 
-                      shadowColor="#10b981"
+                      radius={3} 
+                      fill="#64748b" 
                     />
                   </Group>
                 ))}
 
                 {/* Floating Labels */}
-                <Text x={offset} y={offset - 30} text="DISTRICT A - CENTRAL" fill="#64748b" fontSize={10} fontStyle="bold" letterSpacing={2} />
-                <Text x={offset + 2 * spacing} y={offset - 30} text="DISTRICT B - NORTH" fill="#64748b" fontSize={10} fontStyle="bold" letterSpacing={2} />
+                <Text x={offsetX} y={offsetY - 30} text="NORTH ZONE" fill="#64748b" fontSize={10} fontStyle="bold" letterSpacing={2} />
+                <Text x={offsetX + 4 * spacing - 40} y={offsetY - 30} text="SOUTH ZONE" fill="#64748b" fontSize={10} fontStyle="bold" letterSpacing={2} />
               </Layer>
             </Stage>
           )}
@@ -162,24 +223,24 @@ const LiveMapView: React.FC = () => {
             </button>
           </div>
 
-          <div className="absolute top-6 right-6 flex flex-col gap-3">
+          <div className="absolute bottom-6 right-6 flex flex-col gap-3">
              <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700 p-4 rounded-2xl shadow-2xl space-y-3 min-w-[200px]">
                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase">Live Legend</span>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase">Traffic Flow</span>
                   <Info size={14} className="text-slate-500" />
                </div>
                <div className="space-y-2">
                   <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300">
                     <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]" />
-                    AI Optimized Flow
+                    Free Flow
                   </div>
                   <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300">
                     <div className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
-                    Buffer Threshold
+                    Moderate Load
                   </div>
                   <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300">
                     <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]" />
-                    Gridlock Risk
+                    Congested
                   </div>
                </div>
              </div>
@@ -195,7 +256,7 @@ const LiveMapView: React.FC = () => {
               <Shield size={16} className="text-blue-400" />
             </div>
             <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2">
-              {districts.map(d => (
+              {gridOverview?.zones.map(d => (
                 <button 
                   key={d.name}
                   onClick={() => setSelectedZone(d.name)}
@@ -205,24 +266,26 @@ const LiveMapView: React.FC = () => {
                 >
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-bold text-white">{d.name}</span>
-                    <span className={`text-[10px] font-bold uppercase ${d.color}`}>{d.status}</span>
+                    <span className={`text-[10px] font-bold uppercase ${getZoneColor(d.status)}`}>{d.status}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
                       <motion.div 
                         initial={{ width: 0 }}
-                        animate={{ width: `${d.load}%` }}
-                        className={`h-full ${d.load > 80 ? 'bg-red-500' : d.load > 50 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                        animate={{ width: `${d.load * 100}%` }}
+                        className={`h-full ${d.load > 0.8 ? 'bg-red-500' : d.load > 0.5 ? 'bg-amber-500' : 'bg-emerald-500'}`}
                       />
                     </div>
-                    <span className="text-[10px] font-mono font-bold text-slate-400">{d.load}%</span>
+                    <span className="text-[10px] font-mono font-bold text-slate-400">{Math.round(d.load * 100)}%</span>
                   </div>
                 </button>
               ))}
-            </div>
-            <div className="pt-4 border-t border-slate-800 text-[10px] text-slate-500 flex items-center gap-2 italic">
-               <MousePointer2 size={12} />
-               Click a zone for detailed analytics
+              
+              {!gridOverview && (
+                  <div className="text-center text-slate-500 text-xs py-10 animate-pulse">
+                      loading zone data...
+                  </div>
+              )}
             </div>
           </div>
 

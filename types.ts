@@ -48,3 +48,20 @@ export interface AIStatus {
   efficiency: number; // percentage
   aiActive: boolean;
 }
+
+export interface RoadOverview {
+  laneId: string;
+  congestion: number; // 0.0 - 1.0
+  flow: string; // "optimal", "moderate", "congested"
+}
+
+export interface ZoneOverview {
+  name: string;
+  load: number;
+  status: string;
+}
+
+export interface GridOverview {
+  roads: RoadOverview[];
+  zones: ZoneOverview[];
+}
