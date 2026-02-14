@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Stage, Layer, Rect, Circle, Line, Group, Text } from 'react-konva';
 import { IntersectionStatus, Vehicle, VehicleType, EmergencyVehicle } from '../types';
 
@@ -14,19 +14,18 @@ interface TrafficMap2DProps {
 const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [], emergencyActive, emergencyVehicle, onIntersectionClick }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [tick, setTick] = useState(0);
 
   // Grid constants: 5 roads = 4 blocks = 25 intersections
   const roadWidth = 50; 
   const lanePadding = 10;
   
-  const getGrid = () => {
+  const grid = useMemo(() => {
     if (dimensions.width === 0) return { h: [], v: [] };
     // Evenly spaced 5 roads
     const h = [0.15, 0.32, 0.49, 0.66, 0.83].map(p => dimensions.height * p);
     const v = [0.15, 0.32, 0.49, 0.66, 0.83].map(p => dimensions.width * p);
     return { h, v };
-  };
+  }, [dimensions]);
 
   const getVehicleLength = (type: VehicleType) => {
     switch (type) {
@@ -39,13 +38,6 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
 
   const getVehicleWidth = (type: VehicleType) => (type === 'truck' || type === 'bus' ? 12 : 9);
 
-  // Animation loop just for visual effects (flashing lights), not physics
-  useEffect(() => {
-    const animation = setInterval(() => {
-      setTick(t => (t + 1) % 1000);
-    }, 16);
-    return () => clearInterval(animation);
-  }, []);
 
   useEffect(() => {
     const handleResize = () => {
@@ -61,8 +53,7 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const grid = getGrid();
-  const flashRate = Math.sin(tick * 0.2);
+  const flashRate = 1; // Static value to replace animation
 
   return (
     <div ref={containerRef} className="w-full h-full bg-[#0a0b1e]">
@@ -269,4 +260,4 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
   );
 };
 
-export default TrafficMap2D;
+export default React.memo(TrafficMap2D);

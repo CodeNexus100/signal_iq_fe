@@ -34,3 +34,17 @@ export interface EmergencyVehicle {
   type: 'emergency';
   active: boolean;
 }
+
+export interface AIStatus {
+  congestionLevel: string;
+  prediction: {
+    location: string;
+    time: number; // minutes
+  };
+  recommendation: {
+    action: string;
+    value: string;
+  };
+  efficiency: number; // percentage
+  aiActive: boolean;
+}

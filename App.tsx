@@ -103,8 +103,8 @@ const App: React.FC = () => {
       }
     };
 
-    const interval = setInterval(fetchGridState, 100);
-    const emergencyInterval = setInterval(fetchEmergencyState, 100);
+    const interval = setInterval(fetchGridState, 50);
+    const emergencyInterval = setInterval(fetchEmergencyState, 50);
     
     fetchGridState(); // Initial fetch
     fetchEmergencyState();
