@@ -104,7 +104,7 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
                   <Circle x={x - roadWidth/2 - 5} y={y} radius={4.5} fill={inter.ewSignal === 'GREEN' ? '#10b981' : '#ef4444'} shadowBlur={inter.ewSignal === 'GREEN' ? 12 : 5} shadowColor={inter.ewSignal === 'GREEN' ? '#10b981' : '#ef4444'} />
                   <Circle x={x + roadWidth/2 + 5} y={y} radius={4.5} fill={inter.ewSignal === 'GREEN' ? '#10b981' : '#ef4444'} shadowBlur={inter.ewSignal === 'GREEN' ? 12 : 5} shadowColor={inter.ewSignal === 'GREEN' ? '#10b981' : '#ef4444'} />
                   
-                  <Text x={x - 12} y={y - 5} text={inter.id.split('-')[1]} fill="#475569" fontSize={8} opacity={0.4} />
+                  <Text x={x - 12} y={y - 6} text={inter.id.split('-')[1]} fill="#cbd5e1" fontSize={12} opacity={0.8} fontStyle="bold" />
                 </Group>
               );
             })}
