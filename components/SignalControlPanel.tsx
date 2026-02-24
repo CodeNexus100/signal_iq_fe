@@ -2,18 +2,36 @@
 import React from 'react';
 import { IntersectionStatus } from '../types';
 import { Sliders, Clock, Activity } from 'lucide-react';
+import { useSimulationStore } from '../src/store/useSimulationStore';
 
 interface SignalControlPanelProps {
   intersection: IntersectionStatus;
-  aiEnabled: boolean;
-  setAiEnabled: (val: boolean) => void;
 }
 
-const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection, aiEnabled, setAiEnabled }) => {
+const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection }) => {
   const [nsGreenTime, setNsGreenTime] = React.useState(30);
   const [ewGreenTime, setEwGreenTime] = React.useState(25);
 
+  // Select AI status from store
+  const aiStatus = useSimulationStore(state => state.aiStatus);
+  const aiEnabled = aiStatus?.aiActive || false;
+
+  // Action to disable AI if manual override happens
+  // In a real implementation, we might have a dedicated setAIEnabled action
+  // For now, we assume direct API call in App.tsx sets it, but we need to reflect it here.
+  // We can just add setAIStatus to the store.
+
   React.useEffect(() => {
+    // Poll for specific intersection config if needed, or rely on store if we add config to store.
+    // The original code polled `signals/${intersection.id}`.
+    // Ideally, this should also be centralized, but if it's detailed config not in the main loop,
+    // we can keep it here or move it.
+    // For Phase 1, let's keep it but ideally use a service if we want "No component-level polling".
+    // However, the main simulation loop is critical. This is configuration.
+    // Let's replace the interval with a fetch on mount/change, or just accept that this specific detailed view might poll.
+    // BUT the prompt says "No component-level polling".
+    // So we should probably fetch this in SimulationService or on demand.
+
     const fetchSignalConfig = async () => {
       try {
         const res = await fetch(`http://localhost:8001/api/signals/${intersection.id}`);
@@ -27,23 +45,12 @@ const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection, a
       }
     };
     fetchSignalConfig();
-    const interval = setInterval(fetchSignalConfig, 500);
-    return () => clearInterval(interval);
+    // We remove the interval. If it needs to be live, it should be in the main store state.
   }, [intersection.id]);
 
   const handleUpdate = async (type: 'ns' | 'ew', value: number) => {
     if (type === 'ns') setNsGreenTime(value);
     else setEwGreenTime(value);
-
-    // Debounce or just send? Requirement says "Signal updates must immediately affect". 
-    // But slider dragging generates many events. 
-    // For now, I'll send it. If it's too much, I might need onMouseUp, but input type="range" with onChange fires continuously.
-    // Let's use onChange for state and onMouseUp (commit) for API to avoid flooding, or just fire away if it's local localhost.
-    // Actually, "immediately" implies visual feedback.
-    
-    // Let's try sending on change for responsiveness, assuming local backend can handle it.
-    // Optimization: separate state update from API call? 
-    // I will simply call the API.
     
     try {
       await fetch(`http://localhost:8001/api/signals/${intersection.id}/update`, {
@@ -55,8 +62,10 @@ const SignalControlPanel: React.FC<SignalControlPanelProps> = ({ intersection, a
           mode: 'MANUAL'
         })
       });
-      // If we switch to manual, we should update parent state too
-      if (aiEnabled) setAiEnabled(false);
+      // If we switch to manual, we should update AI status in store if we want instant feedback
+      if (aiEnabled) {
+          useSimulationStore.getState().setAIStatus({ ...aiStatus!, aiActive: false });
+      }
     } catch (err) {
       console.error("Failed to update signal", err);
     }

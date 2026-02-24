@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import KPISection from './components/KPISection';
-import TrafficMap2D from './components/TrafficMap2D';
+import GraphMap from './src/components/map/GraphMap';
 import AIDecisionPanel from './components/AIDecisionPanel';
 import SignalControlPanel from './components/SignalControlPanel';
 import EmergencyCard from './components/EmergencyCard';
@@ -13,111 +13,32 @@ import EmergencyView from './components/EmergencyView';
 import SignalControlView from './components/SignalControlView';
 import InfrastructureView from './components/InfrastructureView';
 import LiveMapView from './components/LiveMapView';
-import { IntersectionStatus } from './types';
+
+// Stores & Services
+import { useSimulationStore } from './src/store/useSimulationStore';
+import { simulationService } from './src/services/SimulationService';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Dashboard');
-  const [isEmergencyActive, setEmergencyActive] = useState(false);
-  const [aiEnabled, setAiEnabled] = useState(false);
-  const [selectedIntersectionId, setSelectedIntersectionId] = useState('I-101');
 
-  const handleSetAiEnabled = (enabled: boolean) => {
-    setAiEnabled(enabled);
-    fetch('http://localhost:8001/api/signals/ai', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled, scope: "GLOBAL" })
-    }).catch(e => console.error("Failed to toggle AI", e));
-  };
+  // Selectors
+  const intersectionsMap = useSimulationStore(state => state.intersections);
+  const intersections = Object.values(intersectionsMap);
+  const selectedIntersectionId = useSimulationStore(state => state.selectedIntersectionId);
+  const vehicles = useSimulationStore(state => state.vehicles);
+  const emergency = useSimulationStore(state => state.emergency);
+  const aiStatus = useSimulationStore(state => state.aiStatus);
+  const controllerMode = useSimulationStore(state => state.controllerMode);
 
-  const handleSetEmergencyActive = (active: boolean) => {
-    setEmergencyActive(active);
-    const endpoint = active ? 'start' : 'stop';
-    fetch(`http://localhost:8001/api/emergency/${endpoint}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
-    }).catch(e => console.error(`Failed to ${endpoint} emergency`, e));
-  };
-  
-  // Multi-Intersection Simulation State (5x5 Grid - 25 intersections)
-  // Matching the image: 5 roads horizontal, 5 roads vertical = 25 intersections
-  const [intersections, setIntersections] = useState<IntersectionStatus[]>([]);
-  const [vehicles, setVehicles] = useState<any[]>([]); // Using any for now, refine with proper Vehicle type later
-  const [emergencyVehicle, setEmergencyVehicle] = useState<any>(null);
-  const emergencyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Fetch grid state from backend
+  // Initialize Simulation Service
   useEffect(() => {
-    const fetchGridState = async () => {
-      try {
-        const response = await fetch('http://localhost:8001/api/grid/state');
-        if (!response.ok) return;
-        const data = await response.json();
-        if (data.intersections) setIntersections(data.intersections);
-        if (data.vehicles) setVehicles(data.vehicles);
-      } catch (error) {
-        console.error("Failed to fetch grid state:", error);
-      }
-    };
-
-    const fetchEmergencyState = async () => {
-      try {
-        const response = await fetch('http://localhost:8001/api/emergency/state');
-        if (!response.ok) return;
-        const data = await response.json();
-        
-        if (data.emergency && data.emergency.active) {
-            // New valid active data: clear any pending timeout
-            if (emergencyTimeoutRef.current) {
-                clearTimeout(emergencyTimeoutRef.current);
-                emergencyTimeoutRef.current = null;
-            }
-
-            setEmergencyActive(data.emergency.active);
-            setEmergencyVehicle({
-                id: 'EMG-1',
-                laneId: data.emergency.laneId,
-                position: data.emergency.position,
-                speed: data.emergency.speed,
-                type: 'emergency',
-                active: data.emergency.active
-            });
-        } else {
-             setEmergencyActive(false);
-             
-             // If we currently have a vehicle and no timeout is active, start persistence timer
-             // We can't check 'emergencyVehicle' state directly here due to closure staleness,
-             // so we rely on the fact that if we had one, the user sees it, and we want to keep it.
-             // But simpler: just set the timeout. If it was already null, setting it to null again in 2s is fine.
-             // Crucially, we do NOT set it to null immediately here.
-             
-             if (!emergencyTimeoutRef.current) {
-                 emergencyTimeoutRef.current = setTimeout(() => {
-                     setEmergencyVehicle(null);
-                     emergencyTimeoutRef.current = null;
-                 }, 2000);
-             }
-        }
-      } catch (error) {
-        console.error("Failed to fetch emergency state:", error);
-      }
-    };
-
-    // Optimization: Reduce polling to 100ms (10Hz) which is sufficient for UI
-    const interval = setInterval(fetchGridState, 100);
-    const emergencyInterval = setInterval(fetchEmergencyState, 200); // 5Hz for emergency is fine
-    
-    fetchGridState(); // Initial fetch
-    fetchEmergencyState();
-
-    return () => {
-      clearInterval(interval);
-      clearInterval(emergencyInterval);
-    };
+    simulationService.start();
+    return () => simulationService.stop();
   }, []);
 
-  const selectedInter = intersections.find(i => i.id === selectedIntersectionId) || intersections[0];
+  const selectedInter = (selectedIntersectionId ? intersectionsMap[selectedIntersectionId] : null) || intersections[0];
 
+  // Loading State
   if (intersections.length === 0) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0a0b1e] text-slate-400">
@@ -156,34 +77,36 @@ const App: React.FC = () => {
                   
                   <div className="absolute top-4 right-4 z-20 flex gap-2">
                      <div className="bg-black/60 px-3 py-1.5 rounded-full border border-slate-700 flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full animate-pulse ${isEmergencyActive ? 'bg-red-500' : 'bg-green-500'}`} />
-                        <span className="text-xs font-mono uppercase tracking-tighter">System: {isEmergencyActive ? 'Critical' : 'Nominal'}</span>
+                        <div className={`w-2 h-2 rounded-full animate-pulse ${emergency?.active ? 'bg-red-500' : 'bg-green-500'}`} />
+                        <span className="text-xs font-mono uppercase tracking-tighter">System: {emergency?.active ? 'Critical' : 'Nominal'}</span>
                       </div>
                   </div>
                   
-                  <TrafficMap2D intersections={intersections} vehicles={vehicles} emergencyActive={isEmergencyActive} emergencyVehicle={emergencyVehicle} onIntersectionClick={setSelectedIntersectionId} />
+                  <GraphMap />
                   
                   <div className="absolute bottom-4 left-4 z-20 flex gap-4 bg-black/40 backdrop-blur-sm p-3 rounded-xl border border-white/5">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 bg-emerald-500 rounded-full" />
                       <span className="text-[10px] uppercase font-bold text-emerald-500">Flowing</span>
                     </div>
-                    <div className="flex items-center gap-2 border-l border-white/10 pl-4">
-                      <div className="w-3 h-3 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
-                      <span className="text-[10px] uppercase font-bold text-red-400">EMERGENCY ACTIVE</span>
-                    </div>
+                    {emergency?.active && (
+                      <div className="flex items-center gap-2 border-l border-white/10 pl-4">
+                        <div className="w-3 h-3 bg-red-500 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                        <span className="text-[10px] uppercase font-bold text-red-400">EMERGENCY ACTIVE</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <SignalControlPanel intersection={selectedInter} aiEnabled={aiEnabled} setAiEnabled={handleSetAiEnabled} />
+                  <SignalControlPanel intersection={selectedInter} />
                   <AnalyticsWidget />
                 </div>
               </div>
 
               <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-                <AIDecisionPanel aiEnabled={aiEnabled} onApply={() => handleSetAiEnabled(true)} />
-                <EmergencyCard isActive={isEmergencyActive} setActive={handleSetEmergencyActive} />
+                <AIDecisionPanel />
+                <EmergencyCard />
                 <InfraStatus />
               </div>
             </div>

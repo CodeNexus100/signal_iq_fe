@@ -3,13 +3,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Map as MapIcon, Layers, Maximize2, MousePointer2, Info, Compass, Shield, Wind } from 'lucide-react';
 import { Stage, Layer, Rect, Circle, Line, Group, Text } from 'react-konva';
-import { GridOverview, RoadOverview } from '../types';
+import { GridOverview } from '../types';
+import { useSimulationStore } from '../src/store/useSimulationStore';
 
 const LiveMapView: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [selectedZone, setSelectedZone] = useState('Central District');
-  const [gridOverview, setGridOverview] = useState<GridOverview | null>(null);
+
+  // Use store instead of local fetch
+  const gridOverview = useSimulationStore(state => state.gridOverview);
 
   useEffect(() => {
     const handleResize = () => {
@@ -25,24 +28,7 @@ const LiveMapView: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Poll Backend
-  useEffect(() => {
-    const fetchOverview = async () => {
-        try {
-            const res = await fetch('http://localhost:8001/api/grid/overview');
-            if (res.ok) {
-                const data = await res.json();
-                setGridOverview(data);
-            }
-        } catch (e) {
-            console.error("Failed to fetch grid overview", e);
-        }
-    };
-
-    fetchOverview(); // Initial
-    const interval = setInterval(fetchOverview, 500);
-    return () => clearInterval(interval);
-  }, []);
+  // Removed polling useEffect, now handled by SimulationService
 
   // Generate 5x5 Grid Nodes (25 nodes)
   // Dynamic scaling

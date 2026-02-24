@@ -2,18 +2,47 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Stage, Layer, Rect, Circle, Line, Group, Text } from 'react-konva';
 import { IntersectionStatus, Vehicle, VehicleType, EmergencyVehicle } from '../types';
+import { useVehicleAnimation } from '../hooks/useVehicleAnimation';
+
+// Now receiving data from store via parent or context if we wanted,
+// but for TrafficMap2D, App.tsx passes props which come from the store.
+// So we just need to ensure the types and props are clean.
+// The prompt said "Update to read from store (interim step)".
+// Since App.tsx passes them, it is effectively reading from store.
+// But we should optimize the component to not need props if we want full decoupling.
+// However, the Plan says "Update to read from store".
+// Let's refactor it to use the store directly, making props optional or removed.
+
+import { useSimulationStore } from '../src/store/useSimulationStore';
 
 interface TrafficMap2DProps {
-  intersections: IntersectionStatus[];
+  // Optional now, as we can get them from store
+  intersections?: IntersectionStatus[];
   vehicles?: Vehicle[];
-  emergencyActive: boolean;
+  emergencyActive?: boolean;
   emergencyVehicle?: EmergencyVehicle | null;
   onIntersectionClick: (id: string) => void;
 }
 
-import { useVehicleAnimation } from '../hooks/useVehicleAnimation';
+const TrafficMap2D: React.FC<TrafficMap2DProps> = ({
+    intersections: propIntersections,
+    vehicles: propVehicles,
+    emergencyActive: propEmgActive,
+    emergencyVehicle: propEmgVehicle,
+    onIntersectionClick
+}) => {
+  // Use Store if props not provided (or prefer store)
+  // Since App.tsx passes them, we use props if present, else store.
+  // Actually, let's switch to Store primary.
+  const storeIntersections = useSimulationStore(state => Object.values(state.intersections));
+  const storeVehicles = useSimulationStore(state => state.vehicles);
+  const storeEmergency = useSimulationStore(state => state.emergency);
 
-const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [], emergencyActive, emergencyVehicle, onIntersectionClick }) => {
+  const intersections = propIntersections || storeIntersections;
+  const vehicles = propVehicles || storeVehicles;
+  const emergencyVehicle = propEmgVehicle !== undefined ? propEmgVehicle : storeEmergency;
+  const emergencyActive = propEmgActive !== undefined ? propEmgActive : !!storeEmergency?.active;
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
@@ -21,7 +50,7 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
   const displayVehicles = useVehicleAnimation({
       serverVehicles: vehicles,
       intersections,
-      pollInterval: 50
+      pollInterval: 50 // Matching previous logic
   });
 
   // Grid constants: 5 roads = 4 blocks = 25 intersections
@@ -46,7 +75,6 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
   };
 
   const getVehicleWidth = (type: VehicleType) => (type === 'truck' || type === 'bus' ? 12 : 9);
-
 
   useEffect(() => {
     const handleResize = () => {
@@ -123,27 +151,6 @@ const TrafficMap2D: React.FC<TrafficMap2DProps> = ({ intersections, vehicles = [
               } else {
                 vy = v.position;
                 const roadX = grid.v[roadIdx];
-                // South (Down) -> Right Lane? (Standard Right Hand Drive). 
-                // North (Up) -> Left Lane?
-                // Let's stick to previous layout: 
-                // 'forward' was roadX - lanePadding (Left). 'backward' was roadX + lanePadding (Right).
-                // Engine logic: 'south' is increasing Y (Down). 'north' is increasing Y (Up - wait no, Decreasing Y).
-                
-                // Let's standardise: 
-                // South (Down) -> Right side of road (x > roadX).
-                // North (Up) -> Left side of road (x < roadX).
-                // Wait, logic in Engine says:
-                // South (Inc Pos): Moves Down.
-                // North (Dec Pos): Moves Up.
-                
-                // If I want standard layout:
-                // Southbound (Down) traffic should be on the LEFT side if UK/India/Japan (LHT) or RIGHT side if US/EU (RHT).
-                // Previous code: 'forward' (Down?) was roadX - lanePadding (Left).
-                // Let's assume Left-Hand Traffic for now? Or just map it.
-                // Let's use:
-                // South (Down) -> roadX - lanePadding (Left)
-                // North (Up) -> roadX + lanePadding (Right)
-                
                 vx = v.direction === 'south' ? roadX - lanePadding : roadX + lanePadding;
                 rot = v.direction === 'south' ? 90 : -90; // Point Down or Up
               }
