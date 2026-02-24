@@ -2,13 +2,28 @@
 import React from 'react';
 import { Siren, ChevronRight, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSimulationStore } from '../src/store/useSimulationStore';
 
-interface EmergencyCardProps {
-  isActive: boolean;
-  setActive: (val: boolean) => void;
-}
+const EmergencyCard: React.FC = () => {
+  const emergency = useSimulationStore(state => state.emergency);
+  const isActive = !!emergency?.active;
 
-const EmergencyCard: React.FC<EmergencyCardProps> = ({ isActive, setActive }) => {
+  const setActive = (val: boolean) => {
+    const endpoint = val ? 'start' : 'stop';
+    fetch(`http://localhost:8001/api/emergency/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    }).catch(e => console.error(`Failed to ${endpoint} emergency`, e));
+
+    // Optimistic update
+    // We update local store assuming success, but for emergency it's tricky as we need details.
+    // If stopping, we can set null. If starting, we wait for poll or set placeholder?
+    // Let's set null on stop.
+    if (!val) {
+        useSimulationStore.getState().setEmergency(null);
+    }
+  };
+
   return (
     <div className={`bg-slate-900/40 border transition-all duration-500 rounded-2xl p-6 flex flex-col gap-4 shadow-xl ${
       isActive ? 'border-red-500/50 shadow-red-500/10' : 'border-slate-700/50'
@@ -36,7 +51,7 @@ const EmergencyCard: React.FC<EmergencyCardProps> = ({ isActive, setActive }) =>
             className="space-y-4"
           >
             <div className="flex flex-col gap-2">
-              <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Active Scenario: Ambulance A-202</span>
+              <span className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Active Scenario: Ambulance {emergency?.id || 'Unknown'}</span>
               <div className="flex justify-between items-end">
                 <p className="text-2xl font-bold font-mono">ETA: 01:45</p>
                 <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-1">
