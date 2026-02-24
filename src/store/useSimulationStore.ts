@@ -7,41 +7,37 @@ import {
   AIStatus,
   GridOverview
 } from '../../types';
+import { MapGraph } from '../types/map';
 
 export type ControllerMode = 'FIXED' | 'HEURISTIC' | 'ML' | 'HYBRID';
+export type SimulationStatus = 'RUNNING' | 'PAUSED' | 'STOPPED';
 
-export interface MapNode {
-  id: string;
-  x: number;
-  y: number;
-  type: 'intersection' | 'endpoint';
-}
-
-export interface MapEdge {
-  id: string;
-  from: string;
-  to: string;
-  lanes: number;
-  geometry?: { x: number; y: number }[]; // Array of points for rendering curves
-}
-
-export interface MapGraph {
-  nodes: MapNode[];
-  edges: MapEdge[];
+export interface SimulationStats {
+    tick: number;
+    avgWaitTime: number; // seconds
+    throughput: number; // vehicles/hour
+    emergencyDelay: number; // seconds (reduction or total)
+    signalSwitchRate: number; // switches/minute
+    congestion: number; // 0-1 density
 }
 
 interface SimulationState {
   // --- Domain State ---
   intersections: Record<string, IntersectionStatus>;
-  vehicles: Vehicle[]; // Kept as array for easier iteration in rendering, could be map
+  vehicles: Vehicle[];
   emergency: EmergencyVehicle | null;
   mapGraph: MapGraph;
   tick_id: number;
 
   // --- Control State ---
   controllerMode: ControllerMode;
-  isSimulationRunning: boolean;
+  simulationStatus: SimulationStatus;
   selectedIntersectionId: string | null;
+  seed: number;
+
+  // --- Metrics ---
+  metrics: SimulationStats;
+  metricsHistory: SimulationStats[]; // For time-series charts
 
   // --- AI State ---
   aiStatus: AIStatus | null;
@@ -54,11 +50,17 @@ interface SimulationState {
   setVehicles: (vehicles: Vehicle[]) => void;
   setEmergency: (emergency: EmergencyVehicle | null) => void;
   setMapGraph: (graph: MapGraph) => void;
+
   setControllerMode: (mode: ControllerMode) => void;
-  setIsSimulationRunning: (running: boolean) => void;
+  setSimulationStatus: (status: SimulationStatus) => void;
   setSelectedIntersectionId: (id: string | null) => void;
+  setSeed: (seed: number) => void;
+
+  setMetrics: (metrics: SimulationStats) => void;
+
   setAIStatus: (status: AIStatus) => void;
   setGridOverview: (overview: GridOverview) => void;
+
   incrementTick: () => void;
 }
 
@@ -70,15 +72,24 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   tick_id: 0,
 
   controllerMode: 'FIXED',
-  isSimulationRunning: true,
+  simulationStatus: 'RUNNING',
   selectedIntersectionId: null,
+  seed: 42,
+
+  metrics: {
+      tick: 0,
+      avgWaitTime: 0,
+      throughput: 0,
+      emergencyDelay: 0,
+      signalSwitchRate: 0,
+      congestion: 0
+  },
+  metricsHistory: [],
 
   aiStatus: null,
   gridOverview: null,
 
   setIntersections: (intersections) => set((state) => {
-    // Convert array to record for faster lookup if needed, or keep array
-    // Here we store as Record for O(1) access by ID
     const record: Record<string, IntersectionStatus> = {};
     intersections.forEach(i => { record[i.id] = i; });
     return { intersections: record };
@@ -92,9 +103,18 @@ export const useSimulationStore = create<SimulationState>((set) => ({
 
   setControllerMode: (controllerMode) => set({ controllerMode }),
 
-  setIsSimulationRunning: (isSimulationRunning) => set({ isSimulationRunning }),
+  setSimulationStatus: (simulationStatus) => set({ simulationStatus }),
 
   setSelectedIntersectionId: (selectedIntersectionId) => set({ selectedIntersectionId }),
+
+  setSeed: (seed) => set({ seed }),
+
+  setMetrics: (metrics) => set((state) => {
+      // Keep only last 50 points for history to save memory
+      const newHistory = [...state.metricsHistory, metrics];
+      if (newHistory.length > 50) newHistory.shift();
+      return { metrics, metricsHistory: newHistory };
+  }),
 
   setAIStatus: (aiStatus) => set({ aiStatus }),
 

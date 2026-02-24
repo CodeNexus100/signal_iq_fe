@@ -19,6 +19,7 @@ export interface MapEdge {
   from: string;
   to: string;
   lanes: number;
+  density?: number; // 0.0 - 1.0 (Congestion)
   geometry?: Point[]; // Array of points for rendering curves (Bezier control points or Polyline)
 }
 

@@ -8,6 +8,7 @@ import { Vehicle } from '../../../types';
 const GraphMap: React.FC = () => {
   const mapGraph = useSimulationStore(state => state.mapGraph);
   const intersections = useSimulationStore(state => state.intersections);
+  const emergency = useSimulationStore(state => state.emergency);
   const setSelectedIntersectionId = useSimulationStore(state => state.setSelectedIntersectionId);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,6 +57,14 @@ const GraphMap: React.FC = () => {
 
   const transform = getTransform();
 
+  // Helper for Edge Coloring based on Density
+  const getEdgeColor = (density?: number) => {
+      if (!density) return '#1e293b';
+      if (density > 0.8) return '#7f1d1d'; // Deep Red
+      if (density > 0.5) return '#78350f'; // Amber
+      return '#1e293b';
+  };
+
   return (
     <div ref={containerRef} className="w-full h-full bg-[#0a0b1e]">
        {dimensions.width > 0 && mapGraph.nodes.length > 0 && (
@@ -73,18 +82,34 @@ const GraphMap: React.FC = () => {
                                    edge.geometry[2].x, edge.geometry[2].y
                                ];
                            } else {
-                               // Fallback straight line
                                const from = mapGraph.nodes.find(n => n.id === edge.from);
                                const to = mapGraph.nodes.find(n => n.id === edge.to);
                                if (from && to) points = [from.x, from.y, to.x, to.y];
                            }
 
+                           // Check if part of emergency route (simple check: does emergency vehicle match this lane?)
+                           // In real app, store would have full route array.
+                           const isEmergencyRoute = emergency?.active && emergency.laneId.includes(edge.id); // Loose match for demo
+
                            return (
                                <Group key={edge.id}>
-                                   {/* Road Base */}
+                                   {/* Emergency Glow */}
+                                   {isEmergencyRoute && (
+                                       <Line
+                                           points={points}
+                                           stroke="#ef4444"
+                                           strokeWidth={30}
+                                           lineCap="round"
+                                           lineJoin="round"
+                                           tension={0.5}
+                                           opacity={0.2}
+                                       />
+                                   )}
+
+                                   {/* Road Base with Density Color */}
                                    <Line
                                        points={points}
-                                       stroke="#1e293b"
+                                       stroke={getEdgeColor(edge.density)}
                                        strokeWidth={20}
                                        lineCap="round"
                                        lineJoin="round"
@@ -116,12 +141,9 @@ const GraphMap: React.FC = () => {
                                >
                                    <Circle radius={15} fill="#1e293b" stroke="#475569" strokeWidth={2} />
 
-                                   {/* Signals Status Overlay */}
                                    {status && (
                                        <>
-                                        {/* NS Signal */}
                                         <Circle y={-20} radius={4} fill={status.nsSignal === 'GREEN' ? '#10b981' : '#ef4444'} />
-                                        {/* EW Signal */}
                                         <Circle x={20} radius={4} fill={status.ewSignal === 'GREEN' ? '#10b981' : '#ef4444'} />
                                        </>
                                    )}
@@ -140,7 +162,6 @@ const GraphMap: React.FC = () => {
                         {/* Vehicles */}
                         {vehicles.map((v: Vehicle & { x: number, y: number, rotation: number }) => (
                             <Group key={v.id} x={v.x} y={v.y} rotation={v.rotation}>
-                                {/* Vehicle Body */}
                                 <Rect
                                     width={16}
                                     height={8}
@@ -150,14 +171,7 @@ const GraphMap: React.FC = () => {
                                     cornerRadius={2}
                                 />
                                 {v.type === 'emergency' && (
-                                     <Rect
-                                        width={4}
-                                        height={8}
-                                        offsetX={0}
-                                        offsetY={4}
-                                        fill="#fff"
-                                        opacity={0.8}
-                                     />
+                                     <Rect width={4} height={8} offsetX={0} offsetY={4} fill="#fff" opacity={0.8} />
                                 )}
                             </Group>
                         ))}

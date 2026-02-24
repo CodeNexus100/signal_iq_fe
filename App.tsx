@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Sidebar from './components/Sidebar';
 import KPISection from './components/KPISection';
 import GraphMap from './src/components/map/GraphMap';
@@ -14,9 +14,15 @@ import SignalControlView from './components/SignalControlView';
 import InfrastructureView from './components/InfrastructureView';
 import LiveMapView from './components/LiveMapView';
 
+// New Components
+import ControllerPanel from './src/components/controls/ControllerPanel';
+import ResearchDashboard from './src/components/dashboard/ResearchDashboard';
+import ReproducibilityControls from './src/components/controls/ReproducibilityControls';
+
 // Stores & Services
 import { useSimulationStore } from './src/store/useSimulationStore';
-import { simulationService } from './src/services/SimulationService';
+import { webSocketService } from './src/services/WebSocketService';
+import { useEffect } from 'react';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('Dashboard');
@@ -30,10 +36,10 @@ const App: React.FC = () => {
   const aiStatus = useSimulationStore(state => state.aiStatus);
   const controllerMode = useSimulationStore(state => state.controllerMode);
 
-  // Initialize Simulation Service
+  // Initialize Simulation Service (WebSocket)
   useEffect(() => {
-    simulationService.start();
-    return () => simulationService.stop();
+    webSocketService.connect();
+    // In real WS, disconnect on unmount
   }, []);
 
   const selectedInter = (selectedIntersectionId ? intersectionsMap[selectedIntersectionId] : null) || intersections[0];
@@ -54,6 +60,8 @@ const App: React.FC = () => {
     switch (activeTab) {
       case 'Analytics':
         return <AnalyticsView />;
+      case 'Research':
+        return <ResearchDashboard />;
       case 'Emergency':
         return <EmergencyView />;
       case 'Signal Control':
@@ -99,13 +107,15 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <SignalControlPanel intersection={selectedInter} />
-                  <AnalyticsWidget />
+                  {/* Research Dashboard or Signal Panel based on context? Or separate tab? */}
+                  {/* Let's embed the new Research Dashboard here for "Research View" */}
+                  <ResearchDashboard />
                 </div>
               </div>
 
               <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-                <AIDecisionPanel />
+                <ControllerPanel />
+                <ReproducibilityControls />
                 <EmergencyCard />
                 <InfraStatus />
               </div>
